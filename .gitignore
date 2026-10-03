@@ -1,0 +1,53 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Environment ──
+.env
+.env.local
+.env.production
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Node / Frontend ──
+node_modules/
+frontend/dist/
+frontend/.next/
+.turbo/
+
+# ── Testing ──
+.pytest_cache/
+htmlcov/
+.coverage
+coverage/
+
+# ── Docker ──
+docker-compose.override.yml
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Uploads ──
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ── Logs ──
+*.log
+logs/
