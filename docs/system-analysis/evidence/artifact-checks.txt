@@ -1,0 +1,16 @@
+Local links checked: 168; no broken links.
+01-context-as-is: valid source/SVG/PNG; PNG 905x515.
+02-use-cases-as-is: valid source/SVG/PNG; PNG 1444x626.
+03-activity-as-is: valid source/SVG/PNG; PNG 1006x1657.
+04-sequence-plan: valid source/SVG/PNG; PNG 986x2227.
+05-sequence-research: valid source/SVG/PNG; PNG 1211x3227.
+06-sequence-report: valid source/SVG/PNG; PNG 913x1643.
+07-session-state: valid source/SVG/PNG; PNG 1135x759.
+08-domain-class: valid source/SVG/PNG; PNG 1036x2065.
+09-components-deployment: valid source/SVG/PNG; PNG 1805x907.
+10-master-plan-target: valid source/SVG/PNG; PNG 705x1085.
+11-use-cases-target: valid source/SVG/PNG; PNG 1139x445.
+20 unique cases, all not_run. Three result/annotation templates have headers only.
+65 application source/test/dependency files match the software verification manifest.
+Gallery JavaScript syntax passed node --check; browser interaction was not executed.
+Diagrams rendered locally and layouts inspected. This report does not contain research-quality benchmark results.

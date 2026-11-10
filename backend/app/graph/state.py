@@ -33,7 +33,11 @@ class DeepResearchState(TypedDict):
     # ═══ User Input & Session ═══
     research_question: str
     session_id: str
-    user_uploaded_files: List[str]          # File paths to local PDFs
+    search_mode: str
+    input_urls: List[str]
+    provided_source_ids: List[str]
+    user_uploaded_files: List[Dict[str, Any]]  # Private upload records; omit from transport snapshots
+    selected_source_ids: List[str]
 
     # ═══ HITL Control Flags ═══
     plan_approved: bool
@@ -46,11 +50,13 @@ class DeepResearchState(TypedDict):
     # ═══ Loop Counter & Limits ═══
     loop_count: int
     max_loops: int
+    budget: Dict[str, Any]
 
     # ═══ Knowledge Accumulation (Appendable) ═══
     sources_found: Annotated[List[SourceMetadata], operator.add]
     documents_read: Annotated[List[Dict[str, Any]], operator.add]
     extracted_findings: Annotated[List[ExtractedFinding], operator.add]
+    source_errors: Annotated[List[str], operator.add]
 
     # ═══ Reflection Phase ═══
     knowledge_gaps: List[KnowledgeGap]

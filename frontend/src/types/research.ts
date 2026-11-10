@@ -21,11 +21,15 @@ export interface ResearchSubQuestion {
 export interface SourceMetadata {
   source_id: string;
   url?: string;
+  open_access_pdf?: string | null;
   title: string;
   authors: string[];
   year?: number;
   source_type: "paper" | "webpage" | "uploaded_pdf";
+  content_kind: "webpage" | "abstract" | "pdf_excerpt";
   content_snippet?: string;
+  page_count?: number | null;
+  truncated: boolean;
   credibility_tier: 1 | 2 | 3;
   citation_count?: number;
 }
@@ -53,18 +57,83 @@ export interface KnowledgeGap {
 
 export interface ResearchStartRequest {
   question: string;
-  depth: "quick" | "standard" | "deep";
+  depth: "quick";
   urls: string[];
+  search_mode: ResearchSearchMode;
 }
+
+export type ResearchSearchMode = "web" | "academic" | "mixed" | "provided";
 
 export interface ResearchStartResponse {
   session_id: string;
-  status: string;
+  status: "created";
 }
 
-export interface ResearchResumeRequest {
-  action: "approve" | "modify" | "feedback";
-  payload: Record<string, unknown>;
+export type ResearchResumeRequest =
+  | { action: "approve"; interrupt_id: string }
+  | { action: "modify"; interrupt_id: string; plan: ResearchSubQuestion[] }
+  | { action: "select_sources"; interrupt_id: string; selected_source_ids: string[] };
+
+export interface UploadPdfResponse {
+  file_id: string;
+  status: "uploaded";
+  source: SourceMetadata;
+}
+
+export type ResearchSessionStatus =
+  | "created"
+  | "running"
+  | "awaiting_plan"
+  | "awaiting_sources"
+  | "awaiting_report"
+  | "completed"
+  | "error";
+
+export type PendingResearchInterrupt =
+  | {
+      interrupt_id: string;
+      type: "PLAN_APPROVAL_REQUIRED";
+      message: string;
+      plan?: ResearchSubQuestion[];
+    }
+  | {
+      interrupt_id: string;
+      type: "SOURCE_SELECTION_REQUIRED";
+      message: string;
+      sources: SourceMetadata[];
+    }
+  | {
+      interrupt_id: string;
+      type: "REPORT_APPROVAL_REQUIRED";
+      message: string;
+      report_draft?: string;
+    };
+
+export interface ResearchSessionStatusResponse {
+  session_id: string;
+  status: ResearchSessionStatus;
+  revision: number;
+  current_step: string;
+  progress_percent: number;
+  research_plan: ResearchSubQuestion[];
+  sources_found: SourceMetadata[];
+  selected_source_ids: string[];
+  source_errors: string[];
+  pending_interrupt: PendingResearchInterrupt | null;
+  error: string | null;
+}
+
+export interface ResearchReportResponse {
+  session_id: string;
+  status: ResearchSessionStatus;
+  report_markdown: string;
+  approved: boolean;
+}
+
+export interface LogEntry {
+  timestamp: string;
+  message: string;
+  type: "info" | "warning" | "error";
 }
 
 // ═══════════════════════════════════════════════
@@ -72,30 +141,16 @@ export interface ResearchResumeRequest {
 // ═══════════════════════════════════════════════
 
 export type WSEventType =
+  | "SNAPSHOT"
   | "STEP_UPDATE"
-  | "LOG_STREAM"
   | "HITL_TRIGGER"
-  | "REPORT_CHUNK"
   | "DONE"
   | "ERROR";
 
 export interface WSMessage {
   event: WSEventType;
-  timestamp: string;
-  data: Record<string, unknown>;
-}
-
-export type HITLType =
-  | "PLAN_APPROVAL_REQUIRED"
-  | "SOURCE_SELECTION_REQUIRED"
-  | "REPORT_APPROVAL_REQUIRED";
-
-export interface HITLTriggerData {
-  type: HITLType;
-  plan?: ResearchSubQuestion[];
-  sources?: SourceMetadata[];
-  report_draft?: string;
-  message: string;
+  timestamp?: string;
+  data: ResearchSessionStatusResponse;
 }
 
 // ═══════════════════════════════════════════════
@@ -133,9 +188,3 @@ export type ResearchStep =
   | "synthesizing"
   | "done"
   | "error";
-
-export interface LogEntry {
-  timestamp: string;
-  message: string;
-  type: "info" | "warning" | "error" | "agent";
-}

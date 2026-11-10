@@ -1,0 +1,31 @@
+@startuml
+!include _style.iuml
+title 06 · Sequence — DUYỆT VÀ XUẤT BÁO CÁO (HIỆN TRẠNG)
+actor "Sinh viên" as S
+participant "React UI" as UI
+participant "REST API" as API
+participant "SessionManager" as M
+participant "LangGraph" as G
+database "State / checkpoint RAM" as RAM
+S -> UI : mở bản nháp
+UI -> API : GET /{id}/report
+API -> M : report_view(id)
+M -> RAM : đọc draft đã lưu
+API --> UI : report_markdown, approved=false
+note over UI,API : Trước approve: UI khóa nút tải.\nNếu gọi trực tiếp endpoint export, API trả 409.
+S -> UI : phê duyệt bản nháp
+UI -> API : POST /{id}/resume {approve, interrupt_id}
+API -> M : xác nhận checkpoint hiện tại
+M ->> G : task Command(resume), cùng session/thread
+G -> RAM : report_approved=true, final_report=draft
+G --> M : kết thúc, không có node chờ
+M --> UI : snapshot completed, revision mới
+note over G,RAM : Approve không gọi lại LLM để viết báo cáo.
+S -> UI : tải Markdown
+UI -> API : GET /{id}/export?format=md
+API -> M : chỉ đọc final của completed + approved
+M -> RAM : final_report
+API --> UI : nội dung Markdown + attachment
+UI --> S : file báo cáo
+note over UI,API : Session lạ: 404. Chưa có draft: 409.\nPDF/DOCX: 501. Không có feedback viết lại ở Phase 3.
+@enduml

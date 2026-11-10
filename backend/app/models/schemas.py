@@ -3,8 +3,12 @@ Pydantic v2 models for data contracts across the entire pipeline.
 Maps directly from brainstorm: tool_api_data_contracts.md
 """
 
-from typing import Dict, List, Any, Optional
-from pydantic import BaseModel, Field
+import ipaddress
+from typing import Dict, List, Any, Literal, Optional
+from urllib.parse import urlsplit
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.config import settings
 
 
 # ═══════════════════════════════════════════════
@@ -13,11 +17,11 @@ from pydantic import BaseModel, Field
 
 class ResearchSubQuestion(BaseModel):
     """A sub-question decomposed from the main research question."""
-    id: str = Field(description="Unique ID, e.g. 'sq_1', 'sq_2'")
-    question: str = Field(description="The sub-question text (in English for optimal search)")
-    target_source: str = Field(
-        description="Preferred source: 'academic' (Semantic Scholar) or 'web' (Tavily)"
-    )
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    id: str = Field(min_length=1, max_length=80, description="Unique ID, e.g. 'sq_1', 'sq_2'")
+    question: str = Field(min_length=1, max_length=500, description="The sub-question text (in English for optimal search)")
+    target_source: Literal["academic", "web"]
     status: str = Field(
         default="pending",
         description="Status: 'pending', 'completed', 'failed'"
@@ -45,6 +49,10 @@ class SourceMetadata(BaseModel):
         description="Source trust level: 1=High (academic), 2=Medium (official docs), 3=Low (blogs)"
     )
     citation_count: Optional[int] = None
+    open_access_pdf: Optional[str] = None
+    content_kind: Literal["webpage", "abstract", "pdf_excerpt"] = "webpage"
+    page_count: Optional[int] = None
+    truncated: bool = False
 
 
 # ═══════════════════════════════════════════════
@@ -133,30 +141,119 @@ class PDFParseResult(BaseModel):
 
 class ResearchStartRequest(BaseModel):
     """Request body for POST /api/v1/research/start"""
-    question: str = Field(min_length=10, description="The research question")
-    depth: str = Field(
-        default="standard",
-        description="Research depth: 'quick' (1 loop), 'standard' (2 loops), 'deep' (3 loops)"
-    )
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=10, max_length=4_000, description="The research question")
+    depth: Literal["quick"] = Field(default="quick", description="Quick one-loop research")
+    search_mode: Literal["web", "academic", "mixed", "provided"] = "web"
     urls: List[str] = Field(
         default_factory=list,
-        description="Optional list of URLs for the agent to prioritize reading"
+        max_length=8,
+        description="Optional URLs supplied as research sources",
     )
+
+    @model_validator(mode="after")
+    def reject_unsupported_inputs(self):
+        normalized = set()
+        for value in self.urls:
+            if len(value) > 2_048 or any(ord(char) < 32 or char.isspace() for char in value):
+                raise ValueError("Each URL must be at most 2048 characters without whitespace.")
+            try:
+                parsed = urlsplit(value)
+                host = (parsed.hostname or "").rstrip(".").lower()
+                _port = parsed.port
+            except ValueError as exc:
+                raise ValueError("A supplied URL is malformed.") from exc
+            try:
+                address = ipaddress.ip_address(host)
+            except ValueError:
+                address = None
+            if (
+                parsed.scheme.lower() not in {"http", "https"}
+                or not parsed.netloc
+                or not host
+                or parsed.username is not None
+                or parsed.password is not None
+                or host == "localhost"
+                or host.endswith((".localhost", ".local", ".internal"))
+                or address is None and "." not in host
+            ):
+                raise ValueError("Only public HTTP(S) URLs without credentials are allowed.")
+            if address is not None and not address.is_global:
+                raise ValueError("Local or non-public IP addresses are not allowed in URLs.")
+            canonical = parsed._replace(fragment="").geturl()
+            if canonical in normalized:
+                raise ValueError("Supplied URLs must be unique.")
+            normalized.add(canonical)
+        return self
 
 
 class ResearchStartResponse(BaseModel):
     """Response body for POST /api/v1/research/start"""
     session_id: str
-    status: str = "started"
+    status: Literal["created"] = "created"
 
 
 class ResearchResumeRequest(BaseModel):
     """Request body for POST /api/v1/research/{session_id}/resume (HITL response)"""
-    action: str = Field(description="'approve', 'modify', 'feedback'")
-    payload: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Modified plan, selected sources, or feedback text"
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    action: Literal["approve", "modify", "select_sources"]
+    interrupt_id: str = Field(min_length=1)
+    plan: Optional[List[ResearchSubQuestion]] = Field(default=None, min_length=1)
+    selected_source_ids: Optional[List[str]] = Field(
+        default=None, min_length=1, max_length=settings.max_documents_to_read
     )
+
+    @model_validator(mode="after")
+    def validate_plan_action(self):
+        if self.action == "modify" and not self.plan:
+            raise ValueError("A non-empty plan is required when modifying the plan.")
+        if self.action == "select_sources" and not self.selected_source_ids:
+            raise ValueError("At least one source must be selected.")
+        if self.action != "select_sources" and self.selected_source_ids is not None:
+            raise ValueError("Sources can only be sent with select_sources.")
+        if self.action == "select_sources" and self.plan is not None:
+            raise ValueError("A plan cannot be sent with source selection.")
+        if self.action == "modify" and self.selected_source_ids is not None:
+            raise ValueError("Sources cannot be sent with plan modification.")
+        if self.plan and len({question.id for question in self.plan}) != len(self.plan):
+            raise ValueError("Plan question IDs must be unique.")
+        if self.plan and len(self.plan) > max(settings.max_tavily_calls, settings.max_scholar_calls):
+            raise ValueError("The edited plan exceeds the session search limit.")
+        if self.action == "approve" and self.plan is not None:
+            raise ValueError("A plan can only be sent with the modify action.")
+        return self
+
+
+class PendingResearchInterrupt(BaseModel):
+    interrupt_id: str
+    type: Literal["PLAN_APPROVAL_REQUIRED", "SOURCE_SELECTION_REQUIRED", "REPORT_APPROVAL_REQUIRED"]
+    message: str
+    plan: Optional[List[ResearchSubQuestion]] = None
+    sources: Optional[List[SourceMetadata]] = None
+    report_draft: Optional[str] = None
+
+
+class ResearchSessionStatusResponse(BaseModel):
+    session_id: str
+    status: Literal["created", "running", "awaiting_plan", "awaiting_sources", "awaiting_report", "completed", "error"]
+    revision: int
+    current_step: str
+    progress_percent: int
+    research_plan: List[ResearchSubQuestion] = Field(default_factory=list)
+    sources_found: List[SourceMetadata] = Field(default_factory=list)
+    selected_source_ids: List[str] = Field(default_factory=list)
+    source_errors: List[str] = Field(default_factory=list)
+    pending_interrupt: Optional[PendingResearchInterrupt] = None
+    error: Optional[str] = None
+
+
+class ResearchReportResponse(BaseModel):
+    session_id: str
+    status: Literal["created", "running", "awaiting_plan", "awaiting_sources", "awaiting_report", "completed", "error"]
+    report_markdown: str
+    approved: bool
 
 
 class GraphDataResponse(BaseModel):

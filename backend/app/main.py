@@ -12,9 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.routes.research import router as research_router
 from app.api.routes.export import router as export_router
-from app.api.websocket import router as ws_router
+from app.api.websocket import router as ws_router, broadcast_to_session
 from app.services.qdrant_service import qdrant_service
 from app.services.neo4j_service import neo4j_service
+from app.services.research_sessions import session_manager
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +23,23 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle events."""
-    # ── Startup ──
-    logger.info("🚀 Starting Deep Research Agent backend...")
+    session_manager.publish = broadcast_to_session
+    logger.info("Starting Deep Research Agent backend...")
     await qdrant_service.initialize()
     await neo4j_service.initialize()
-    logger.info("✅ All services initialized successfully.")
+    logger.info("All services initialized successfully.")
 
-    yield
-
-    # ── Shutdown ──
-    logger.info("🛑 Shutting down services...")
-    await neo4j_service.close()
-    logger.info("✅ Shutdown complete.")
+    try:
+        yield
+    finally:
+        # Stop in-memory graph tasks before closing their database clients.
+        await session_manager.shutdown()
+        logger.info("Shutting down services...")
+        try:
+            await neo4j_service.close()
+        finally:
+            await qdrant_service.close()
+        logger.info("Shutdown complete.")
 
 
 app = FastAPI(

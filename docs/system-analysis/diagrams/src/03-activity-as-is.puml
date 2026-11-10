@@ -1,0 +1,42 @@
+@startuml
+!include _style.iuml
+title 03 · Luồng nghiệp vụ — HIỆN TRẠNG QUICK
+|Sinh viên / UI|
+start
+:Nhập câu hỏi, bối cảnh,\ntiêu chí trong ô văn bản;
+|Backend / workflow|
+:Tạo phiên created;
+:Run → sinh kế hoạch;
+:Lưu plan + checkpoint;
+:awaiting_plan;
+|Sinh viên / UI|
+:Đọc, sửa hoặc duyệt plan;
+|Backend / workflow|
+if (Payload và interrupt hợp lệ?) then (Có)
+ :Tiếp tục checkpoint;
+else (Không)
+ :422 / 409;
+ note right: Phiên vẫn chờ duyệt;\nngười dùng có thể sửa và gửi lại.
+ stop
+endif
+:Tìm web → đọc an toàn → index;
+:Truy hồi → trích xuất findings;
+:Lưu Source/Finding cùng session;
+:Reflect một lần;
+if (Có bằng chứng dùng được,\nbudget và citation hợp lệ?) then (Có)
+ :Tổng hợp + thay references chuẩn;
+ :Lưu draft, awaiting_report;
+else (Không)
+ :error, không giả completed;
+ stop
+endif
+|Sinh viên / UI|
+:Đọc draft và mở nguồn để kiểm tra;
+:Phê duyệt báo cáo;
+|Backend / workflow|
+:Tiếp tục approval node;
+:completed + final_report;
+|Sinh viên / UI|
+:Tải Markdown đã duyệt;
+stop
+@enduml

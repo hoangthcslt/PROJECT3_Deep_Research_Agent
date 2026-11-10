@@ -1,0 +1,21 @@
+case_id,language,task_group,question,expected_aspects,evidence_mode,evaluation_rule,status
+BM01,vi,comparison,So s?nh Qdrant v? pgvector cho chatbot t?i li?u ?? ?n ch?y local.,tri?n khai|retrieval|v?n h?nh|gi?i h?n,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM02,vi,comparison,So s?nh FastAPI v? Django REST cho backend ?? ?n m?t nh?m nh?.,API|async IO|c?ng s?c ph?t tri?n|tri?n khai,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM03,vi,comparison,So s?nh React v? Vue cho giao di?n duy?t k? ho?ch v? xem b?o c?o.,state|form|h? sinh th?i|?? ph?c t?p,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM04,en,comparison,Compare PostgreSQL and MongoDB for a small course project with related entities.,data relationships|queries|operations|trade-offs,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM05,vi,deployment,Kh?o s?t Docker Compose v? ch?y d?ch v? tr?c ti?p khi demo ?? ?n tr?n m?y c? nh?n.,setup|reproducibility|resource use|failure handling,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM06,en,workflow,Compare LangGraph and a hand-written async state machine for a workflow with human approval.,state|pause/resume|testability|maintenance,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM07,vi,retrieval,Kh?o s?t BM25 v? dense retrieval cho t?i li?u m?n h?c b?ng ti?ng Vi?t.,retrieval assumptions|evaluation|language|cost,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM08,en,storage,Compare SQLite and PostgreSQL for a single-user local research prototype.,durability|concurrency|deployment|scope,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM09,vi,architecture,Khi n?o cache trong RAM ?? d?ng v? khi n?o c?n Redis cho ?? ?n nh??,lifetime|multiple processes|complexity|failure,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM10,en,interaction,Compare WebSocket and polling for progress updates in a long-running student research workflow.,reconnect|stale updates|complexity|latency measurement,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM11,vi,retrieval,So s?nh ??a tr?c ti?p context v? RAG v?i t?i ?a t?m trang t?i li?u ng?n.,context limit|retrieval loss|embedding cost|fair comparison,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM12,en,verification,Explain how a student should verify claims and citations in an AI-generated technology survey.,claim support|citation correctness|source access|limitations,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM13,vi,search,Kh?o s?t search API v? t?m th? c?ng cho b??c thu th?p ngu?n c?a ?? ?n.,control|cost accounting|source quality|reproducibility,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM14,en,evaluation,Plan an evaluation of multilingual embeddings for Vietnamese technology documentation.,test set|relevance labels|baseline|version control,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM15,vi,reliability,Ph?n t?ch checkpoint RAM v? checkpoint l?u b?n v?ng cho phi?n ?ang ch? ng??i d?ng duy?t.,restart|state recovery|budget recovery|scope,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM16,en,security,Distinguish session-scoped retrieval filtering from user authorization in a research application.,data isolation|access control|threat boundary|limitations,corpus_to_freeze,rubric_and_evidence_required,not_run
+BM17,vi,no-evidence fixture,"D?a tr?n corpus fixture kh?ng c? b?ng ch?ng ph? h?p, h?y kh?o s?t c?u h?i ???c giao.",no fabricated report|explicit failure,fixture_to_create,exclude_from_ordinary_quality_average,not_run
+BM18,vi,conflict fixture,??i chi?u hai ngu?n fixture c? k?t lu?n tr?i ng??c; n?u ?i?u ch?a th? k?t lu?n.,conflict|conditions|both sources|uncertainty,fixture_to_create,exclude_from_ordinary_quality_average,not_run
+BM19,en,version fixture,Separate older and newer statements in a frozen version-labelled documentation corpus.,version|date|source scope|no unsupported current claim,fixture_to_create,exclude_from_ordinary_quality_average,not_run
+BM20,en,budget fixture,Run a research fixture with an exhausted provider-call budget.,stop before paid call|error state|no false completion,fixture_to_create,exclude_from_ordinary_quality_average,not_run

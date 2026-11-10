@@ -1,0 +1,66 @@
+@startuml
+!include _style.iuml
+title Phase 4 — URL, PDF, bài báo và chọn nguồn\nTHIẾT KẾ TRIỂN KHAI · kiểm tra kết quả tại PHASE4_STATUS.md
+actor "Sinh viên CNTT" as Student
+boundary "React UI" as UI
+control "REST + Session Manager" as API
+participant "PDF storage/parser" as PDF
+participant "LangGraph" as Graph
+participant "Tavily / Semantic Scholar" as Search
+participant "Safe HTTP reader" as HTTP
+database "Qdrant + Neo4j" as DB
+
+Student -> UI: Câu hỏi + chế độ nguồn + URL/PDF
+UI -> API: POST start
+API --> UI: session_id (created)
+loop Từng PDF, tối đa 3 file
+ UI -> API: upload-pdf(session_id, file)
+ API -> API: Khóa session; chỉ cho phép created
+ API -> PDF: Stream giới hạn 10 MiB\nkiểm tra PDF, tên do server tạo
+ PDF -> PDF: Parse tối đa 10 trang đầu\nexcerpt 8.000 byte + preview
+ PDF --> API: Record nội bộ (path + text + metadata)
+ API --> UI: Metadata công khai; không trả path
+end
+UI -> API: POST run
+API -> Graph: Chạy một task cho session
+Graph -> Graph: Planner dùng preview có giới hạn\nvà checkpoint kế hoạch
+Graph --> API: PLAN_APPROVAL_REQUIRED
+API --> UI: Snapshot awaiting_plan
+Student -> UI: Duyệt/sửa kế hoạch
+UI -> API: resume(action, interrupt_id, plan?)
+API -> Graph: Command(resume)
+opt Chế độ web / academic / mixed
+ Graph -> Search: Query theo plan và budget provider
+ Search --> Graph: Candidate + abstract + OA PDF URL
+end
+Graph -> Graph: Hợp nhất candidate URL/PDF/search\ngiữ lịch sử nguồn
+Graph --> API: SOURCE_SELECTION_REQUIRED
+API --> UI: Snapshot awaiting_sources + metadata
+Student -> UI: Chọn/bỏ chọn nguồn
+UI -> API: resume(select_sources, interrupt_id, IDs)
+API -> API: Kiểm tra stage, stale ID, tập con,\nID duy nhất và giới hạn đọc
+API -> Graph: Command(resume)
+loop Chỉ nguồn được chọn chưa index
+ alt PDF tải lên
+  Graph -> PDF: Dùng excerpt đã parse
+ else URL / OA PDF
+  Graph -> HTTP: Fetch có DNS/IP pin/redirect/size/time guards
+  HTTP --> Graph: Web text / PDF excerpt
+ else Paper chỉ có abstract
+  Graph -> Graph: Dùng abstract; không gọi là full text
+ end
+ Graph -> DB: Index tối đa 8.000 byte/nguồn\nmetadata kind/truncated; key scoped
+end
+Graph -> Graph: Extract → graph → reflect → synthesize\nchỉ citation nguồn đã index
+Graph --> API: REPORT_APPROVAL_REQUIRED
+API --> UI: Draft + nhãn giới hạn nguồn
+Student -> UI: Duyệt báo cáo
+UI -> API: resume(approve, interrupt_id)
+API -> Graph: Finalize không generate lại
+API --> UI: completed; cho phép tải Markdown
+note over API,DB
+ Sessions/checkpoints vẫn trong RAM, một backend worker.
+ Tích hợp provider/database thật và benchmark chưa được xác nhận.
+ PDF đã được parse preview trước bước chọn; bỏ chọn chặn indexing/đọc sâu.
+end note
+@enduml

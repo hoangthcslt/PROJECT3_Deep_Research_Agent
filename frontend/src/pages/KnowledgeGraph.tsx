@@ -8,12 +8,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { Search, Filter, ZoomIn, ZoomOut } from "lucide-react";
+import { Search, ZoomIn, ZoomOut } from "lucide-react";
 import { api } from "../services/api";
 import type { GraphData, GraphNode } from "../types/research";
-
-// Dynamic import for react-force-graph-2d (to avoid SSR issues)
-let ForceGraph2D: React.ComponentType<any> | null = null;
 
 export default function KnowledgeGraph() {
   const { sessionId } = useParams<{ sessionId: string }>();

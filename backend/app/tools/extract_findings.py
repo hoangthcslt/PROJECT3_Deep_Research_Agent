@@ -11,6 +11,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
+from app.models.budget import SessionBudget
 from app.models.schemas import ExtractedKnowledge
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ Chỉ trích xuất thông tin có trong tài liệu. Không bịa thêm.
 async def extract_key_findings(
     document_text: str,
     research_question: str,
+    budget: SessionBudget,
 ) -> ExtractedKnowledge:
     """
     Extract structured knowledge from document text using LLM.
@@ -48,27 +50,25 @@ async def extract_key_findings(
     # Truncate to prevent context overflow
     truncated_text = document_text[:15_000]
 
-    try:
-        llm = ChatGoogleGenerativeAI(
-            model=settings.gemini_model,
-            google_api_key=settings.google_api_key,
-            temperature=0,
-        )
-        structured_llm = llm.with_structured_output(ExtractedKnowledge)
+    prompt = EXTRACTION_PROMPT_TEMPLATE.format(
+        research_question=research_question[:2_000],
+        document_text=truncated_text,
+    )
+    budget.reserve_input(prompt)
+    llm = ChatGoogleGenerativeAI(
+        model=settings.gemini_model,
+        google_api_key=settings.google_api_key,
+        temperature=0,
+        max_output_tokens=2048,
+    )
+    structured_llm = llm.with_structured_output(ExtractedKnowledge)
+    result = await structured_llm.ainvoke(prompt)
+    if len(result.model_dump_json()) > 20_000:
+        raise ValueError("Extraction response exceeded the allowed output size.")
 
-        prompt = EXTRACTION_PROMPT_TEMPLATE.format(
-            research_question=research_question,
-            document_text=truncated_text,
-        )
-
-        result = await structured_llm.ainvoke(prompt)
-
-        logger.info(
-            f"🔬 extract_key_findings → "
-            f"{len(result.findings)} findings, {len(result.entities)} entities"
-        )
-        return result
-
-    except Exception as e:
-        logger.error(f"❌ Extraction failed: {e}")
-        return ExtractedKnowledge(findings=[], entities=[], citations=[])
+    logger.info(
+        "Extracted %s findings and %s entities",
+        len(result.findings),
+        len(result.entities),
+    )
+    return result

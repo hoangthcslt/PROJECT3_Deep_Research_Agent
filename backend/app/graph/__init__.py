@@ -1,4 +1,9 @@
-from app.graph.state import DeepResearchState
-from app.graph.workflow import build_research_graph, research_graph
+"""Research graph schema.
 
-__all__ = ["DeepResearchState", "build_research_graph", "research_graph"]
+Import the workflow explicitly from ``app.graph.workflow`` so tooling that only
+needs the state type does not eagerly load every provider and database client.
+"""
+
+from app.graph.state import DeepResearchState
+
+__all__ = ["DeepResearchState"]

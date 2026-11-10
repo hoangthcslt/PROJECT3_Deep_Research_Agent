@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+title 07 · UML state machine — SESSION HIỆN TRẠNG
+state "created" as Created
+state "running\ncurrent_step thay đổi" as Running
+state "awaiting_plan" as Plan
+state "awaiting_report" as Report
+state "completed" as Completed
+state "error" as Error
+[*] --> Created : POST start
+Created --> Running : POST run hợp lệ
+Running --> Plan : plan_approval interrupt
+Plan --> Running : resume approve/modify\ninterrupt_id đúng
+Plan --> Plan : request stale / không hợp lệ\nHTTP 409 / 422
+Running --> Report : report_approval interrupt
+Report --> Running : resume approve\ninterrupt_id đúng
+Report --> Report : request stale / không hợp lệ\nkhông tiếp tục graph
+Running --> Completed : graph hết node chờ
+Running --> Error : provider / budget /\nguard / graph lỗi
+Completed --> Completed : GET report / export
+note bottom of Running
+Một phiên chỉ có một task được schedule
+cho mỗi transition hợp lệ.
+Mốc progress không phải đo thời gian.
+end note
+note bottom of Error
+Chưa có retry/resume từ error.
+Có thể tạo phiên mới.
+end note
+note left of Created
+Restart làm mất session/checkpoint RAM.
+GET sau đó trả 404, không phải một
+giá trị status mới trong state machine.
+end note
+@enduml

@@ -1,0 +1,27 @@
+@startuml
+!include _style.iuml
+title 10 · Quy trình master plan — ĐỀ XUẤT TỪ BASELINE PHASE 3
+start
+:G0 · Cô duyệt bài toán, persona,\nA/B/C và rubric;
+:G1 · Đóng băng baseline\ncode/test + hiện trạng UML;
+note right
+Phase 3 đã có code/test.
+Không hồi tố thành phân tích trước code.
+end note
+:G2 · Tích hợp dịch vụ thật\nvà chạy scenario nghiệm thu;
+:G3 · Thiết kế harness / corpus /\nbaseline / nhãn / ngân sách;
+:G4 · Pilot và benchmark\nlưu dữ liệu thô, ghi cả failure;
+if (Lợi ích được dữ liệu ủng hộ?) then (Có)
+ :Giữ thiết kế có bằng chứng;
+else (Không / chưa rõ)
+ :Sửa giả thuyết hoặc\nđơn giản hóa công nghệ;
+endif
+if (Use case mở rộng được duyệt?) then (Có)
+ :G5 · Thiết kế target và tiêu chí\ntrước khi implement phần mở rộng;
+ :Test / đo lại phần thay đổi;
+else (Không)
+ :Giữ core nhỏ, ghi giới hạn;
+endif
+:G6 · Gói demo, UML, báo cáo,\nkết quả thật và giới hạn;
+stop
+@enduml

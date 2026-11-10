@@ -1,3 +1,5 @@
+> **TÀI LIỆU Ý TƯỞNG CŨ — đối chiếu ngày 09/11/2026.** Nội dung dưới đây là brainstorm, không xác nhận chức năng đã làm hoặc hiệu quả đã đo. Các tuyên bố miễn phí/quota, đa nguồn, nhiều vòng, graph và “100% thật” chưa được chứng minh theo hiện trạng Phase 3. Xem [hồ sơ bài toán–thiết kế mới](system-analysis/README.md) và [biên bản code/test](PHASE3_STATUS.md). Người dùng hiện đã chốt hướng sinh viên CNTT khảo sát công nghệ cho đề cương.
+
 ## Deep Research Agent — Trợ Lý Nghiên Cứu & Tổng Hợp Tri Thức Đa Nguồn
 
 ### Vấn đề thực tế
