@@ -37,13 +37,13 @@ citation PDF nội bộ an toàn. Có helper kiểm tra URL/tệp trong
 Tài liệu: `docs/PHASE4_IMPLEMENTATION.md` ghi hợp đồng và phạm vi; sơ đồ Phase 4
 là hình 12 trong `docs/system-analysis/diagrams/`. Gallery tài liệu được sửa
 lỗi mất dấu tiếng Việt. Các hình 01–09 và source fingerprint giữ baseline
-Phase 3. Lịch sử kiểm tra ngắn nằm trong `docs/logs/2026-11-09-phase4/`.
+Check summaries are committed in docs/phase4-checks/.
 
 ## Kiểm tra gần nhất (9/11, trước khi dừng)
 
 | Kiểm tra | Kết quả | Ghi chú |
 |---|---:|---|
-| Backend toàn bộ `tests` | **74 passed, 7 failed** | Đều cần kiểm tra/cập nhật test hợp đồng Phase 4 hoặc expectation cũ; xem các tên test trong log. |
+| Backend tests | **74 passed, 7 failed** | Some older assertions expect the Phase 3 contract; one stale/duplicate-resume failure still needs review. |
 | Node snapshot + input tests | **6/6 passed** | Logic snapshot, URL, giới hạn PDF và link citation. |
 | Frontend build | **Failed** | `ResearchProgress.tsx:101`: TypeScript báo `planInterrupt` có thể null trong effect. |
 | Frontend lint | Exit 0 | 6 React/hooks warnings còn lại. |
@@ -57,9 +57,6 @@ không sinh được text trên trang nên parser đúng khi từ chối. Cần 
 khi sửa fixture/helper. Không có test gọi dịch vụ trả phí; không có tích hợp
 Gemini/Tavily/Qdrant/Neo4j thật.
 
-Log các lệnh gần nhất: `backend-pytest.txt`, `backend-ruff.txt`,
-`frontend-build.txt`, `frontend-lint.txt`, `frontend-tests.txt`,
-`diff-check.txt` trong `docs/logs/2026-11-09-phase4/`.
 
 ## Việc làm tiếp theo
 
@@ -82,3 +79,6 @@ session. Link PDF trong Markdown xuất ra là đường dẫn nội bộ tươn
 backend và file nguồn còn tồn tại. Các URL ngoài phải được fetch qua SSRF/DNS
 guards; hành vi live chưa được xác nhận. Không có browser host để xem trực tiếp
 UI trong checkpoint này.
+
+Draft PR: https://github.com/hoangthcslt/PROJECT3_Deep_Research_Agent/pull/1
+Branch: feature/multi-source-research-phase4; code commit: 6ed3b12.
