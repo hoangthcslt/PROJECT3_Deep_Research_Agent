@@ -1,0 +1,45 @@
+@startuml
+!include _style.iuml
+left to right direction
+title 02 · UML use case — HIỆN TRẠNG CORE A/B/C
+actor "Sinh viên CNTT" as Student
+actor "Gemini API" as Gemini
+actor "Tavily API" as Tavily
+actor "Website nguồn" as Web
+rectangle "Trợ lý khảo sát công nghệ · Quick web" {
+ usecase "UC-01\nTạo khảo sát và kế hoạch" as U1
+ usecase "UC-02\nDuyệt kế hoạch" as U2
+ usecase "Sửa câu hỏi phụ" as Edit
+ usecase "UC-03\nThực hiện và theo dõi khảo sát" as U3
+ usecase "UC-04\nĐọc draft, đối chiếu nguồn" as U4
+ usecase "UC-05\nPhê duyệt báo cáo" as U5
+ usecase "UC-06\nTải Markdown" as U6
+ usecase "UC-07\nMở lại trạng thái phiên" as U7
+}
+U1 -[hidden]down-> U2
+U2 -[hidden]down-> U3
+U3 -[hidden]down-> U4
+U4 -[hidden]down-> U5
+U5 -[hidden]down-> U6
+U6 -[hidden]down-> U7
+Student -right- U1
+Student -right- U2
+Student -right- U3
+Student -right- U4
+Student -right- U5
+Student -right- U6
+Student -right- U7
+Edit ..> U2 : <<extend>>\n[khi muốn chỉnh]
+U1 -right- Gemini
+U3 -right- Gemini
+U3 -right- Tavily
+U3 -right- Web
+Gemini -[hidden]down-> Tavily
+Tavily -[hidden]down-> Web
+legend bottom
+Tiền điều kiện: completed và report_approved.
+Chỉ khi đó UC-06 mới được tải Markdown.
+Chỉ khi backend còn giữ session trong RAM.
+UC-07 không khôi phục được session sau restart.
+endlegend
+@enduml

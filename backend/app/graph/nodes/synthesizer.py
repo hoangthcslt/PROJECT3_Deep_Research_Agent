@@ -1,20 +1,27 @@
 """
 Node 7: Report Synthesizer
 Generates a structured research report from all extracted findings.
-Includes HITL interrupt for user review before finalization.
+Commits the draft before the separate report approval node pauses the graph.
 
 Maps from brainstorm: agent_flow_state_machine.md (Node 7)
            + system_prompt_api_schema.md (Synthesizer Prompt).
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
 
 from app.config import settings
 from app.graph.state import DeepResearchState
+from app.guardrails.citation_guard import (
+    canonical_references,
+    format_canonical_references,
+    strip_generated_references,
+    validate_report_citations,
+)
+from app.models.budget import SessionBudget
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +45,7 @@ Báo cáo viết bằng Markdown chuẩn:
 """
 
 
-async def synthesizer_node(state: DeepResearchState) -> Dict[str, Any]:
+async def synthesizer_node(state: DeepResearchState) -> dict[str, Any]:
     """
     Synthesize a structured research report from all collected findings.
     Triggers HITL interrupt for user review before finalization.
@@ -47,9 +54,20 @@ async def synthesizer_node(state: DeepResearchState) -> Dict[str, Any]:
 
     research_question = state["research_question"]
     findings = state.get("extracted_findings", [])
-    sources = state.get("sources_found", [])
     reflection_summary = state.get("reflection_summary", "")
     user_feedback = state.get("user_feedback")
+    budget = SessionBudget.model_validate(state.get("budget") or {})
+
+    references = canonical_references(state)
+    if not references:
+        raise RuntimeError("Cannot synthesize a report without indexed web sources.")
+    readable_ids = set(references)
+    findings = [
+        finding for finding in findings
+        if finding.source_ids and set(finding.source_ids) <= readable_ids
+    ]
+    if not findings:
+        raise RuntimeError("Cannot synthesize a report without source-backed findings.")
 
     # ── Build context for synthesis ──
     findings_text = "\n".join([
@@ -58,12 +76,8 @@ async def synthesizer_node(state: DeepResearchState) -> Dict[str, Any]:
         for f in findings
     ])
 
-    sources_reference = "\n".join([
-        f"- {s.source_id}: {s.title} ({s.source_type})"
-        + (f" — {s.url}" if s.url else "")
-        + (f" — {', '.join(s.authors)}" if s.authors else "")
-        for s in sources
-    ])
+    sources_reference = format_canonical_references(references)
+    source_limitations = _source_limitations(state)
 
     feedback_instruction = ""
     if user_feedback:
@@ -79,12 +93,16 @@ CÁC PHÁT HIỆN ĐÃ TRÍCH XUẤT:
 
 DANH MỤC NGUỒN TÀI LIỆU (dùng [^REF_X] để trích dẫn):
 {sources_reference}
+
+PHẠM VI ĐỌC VÀ GIỚI HẠN NGUỒN (không mô tả abstract/PDF excerpt như toàn văn):
+{source_limitations}
 {feedback_instruction}
 
 Hãy viết báo cáo nghiên cứu hoàn chỉnh theo đúng cấu trúc đã quy định.
 """
 
     # ── Generate report with LLM ──
+    budget.reserve_input(f"{SYNTHESIZER_SYSTEM_PROMPT}\n{user_prompt}")
     llm = ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         google_api_key=settings.google_api_key,
@@ -97,35 +115,71 @@ Hãy viết báo cáo nghiên cứu hoàn chỉnh theo đúng cấu trúc đã q
         {"role": "user", "content": user_prompt},
     ])
 
-    report_draft = response.content
+    if not isinstance(response.content, str) or len(response.content) > 50_000:
+        raise ValueError("Synthesizer response exceeded the allowed output size.")
+
+    generated_report = response.content.strip()
+    validate_report_citations(generated_report, references)
+    report_draft = strip_generated_references(generated_report)
+    if source_limitations:
+        report_draft = report_draft.rstrip() + "\n\n## Sources and reading limitations\n\n" + source_limitations
+    # Replace generated references with title/URL pairs from indexed sources.
+    report_draft = report_draft.rstrip() + "\n\n" + format_canonical_references(references)
 
     logger.info(f"📝 Synthesizer: Generated report ({len(report_draft)} chars)")
 
     # ── HITL Interrupt: Ask user to review the report ──
-    user_action = interrupt({
-        "type": "REPORT_APPROVAL_REQUIRED",
-        "report_draft": report_draft,
-        "sources_count": len(sources),
-        "findings_count": len(findings),
-        "message": "Báo cáo nghiên cứu đã sẵn sàng. Bạn có muốn chỉnh sửa phần nào không?",
-    })
-
-    # ── Process user response ──
-    if isinstance(user_action, dict) and user_action.get("action") == "feedback":
-        # User wants revisions → store feedback, report will be re-synthesized
-        return {
-            "report_draft": report_draft,
-            "user_feedback": user_action.get("comment", ""),
-            "report_approved": False,
-        }
-
-    # User approved → finalize
-    final_content = report_draft
-    if isinstance(user_action, dict):
-        final_content = user_action.get("final_content", report_draft)
-
     return {
         "report_draft": report_draft,
-        "final_report": final_content,
+        "report_approved": False,
+        "budget": budget.model_dump(),
+    }
+
+
+def _source_limitations(state: DeepResearchState) -> str:
+    sources = {
+        source.source_id if hasattr(source, "source_id") else source.get("source_id"): source
+        for source in state.get("sources_found", [])
+    }
+    lines = []
+    for document in state.get("documents_read", []):
+        source_id = document.get("source_id")
+        kind = document.get("content_kind", "webpage")
+        details = []
+        if kind == "abstract":
+            details.append("abstract only; this is not full paper text")
+        elif kind == "pdf_excerpt":
+            pages = document.get("page_count")
+            details.append(
+                f"PDF excerpt, at most the first 10 pages"
+                + (f" of {pages} pages" if pages is not None else "")
+            )
+        else:
+            details.append("web page text excerpt")
+        if document.get("truncated"):
+            details.append("excerpt truncated to the indexing limit")
+        source = sources.get(source_id)
+        title = (
+            source.title if hasattr(source, "title") else source.get("title", "")
+        ) if source else document.get("title", "")
+        lines.append(f"- [^{source_id}] {title[:160]}: {'; '.join(details)}.")
+
+    for error in state.get("source_errors", [])[:12]:
+        if isinstance(error, str):
+            lines.append(f"- {error[:300]}")
+    return "\n".join(lines)
+
+
+async def report_approval_node(state: DeepResearchState) -> dict[str, Any]:
+    """Commit report approval separately so resuming never repeats synthesis."""
+    user_action = interrupt({
+        "type": "REPORT_APPROVAL_REQUIRED",
+        "report_draft": state.get("report_draft") or "",
+        "message": "Báo cáo nghiên cứu đã sẵn sàng. Vui lòng xem xét và phê duyệt.",
+    })
+    if not isinstance(user_action, dict) or user_action.get("action") != "approve":
+        raise ValueError("Only report approval is supported in this phase.")
+    return {
         "report_approved": True,
+        "final_report": state.get("report_draft"),
     }

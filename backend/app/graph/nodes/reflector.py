@@ -14,6 +14,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
 from app.graph.state import DeepResearchState
+from app.models.budget import SessionBudget
 from app.models.schemas import KnowledgeGap
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,8 @@ Nhiệm vụ của bạn là đọc các phát hiện hiện có, đối chiếu
 3. Tính toán "Coverage Score" (0.0 - 1.0):
    - Nếu Coverage Score >= 0.8: Đặt "has_enough_info" = True, không tạo thêm sub-questions mới.
    - Nếu Coverage Score < 0.8: Chỉ ra chính xác khía cạnh nào còn thiếu và sinh ra tối đa 2 search queries bổ sung.
-4. CẢNH BÁO: Không được tự bịa ra thông tin để lấp lỗ hổng. Nếu tài liệu không nói, phải coi là "chưa có dữ liệu".
+4. Chỉ tạo tối đa {MAX_WEB_GAPS} truy vấn web bổ sung; không tạo truy vấn academic.
+5. CẢNH BÁO: Không được tự bịa ra thông tin để lấp lỗ hổng. Nếu tài liệu không nói, phải coi là "chưa có dữ liệu".
 
 [OUTPUT FORMAT]
 Return JSON with:
@@ -41,7 +43,7 @@ Return JSON with:
     {
       "missing_aspect": "What is missing",
       "suggested_query": "Search query to fill the gap (in English)",
-      "target_source": "academic" or "web"
+      "target_source": "web"
     }
   ]
 }
@@ -59,6 +61,13 @@ async def reflector_node(state: DeepResearchState) -> Dict[str, Any]:
     research_plan = state.get("research_plan", [])
     findings = state.get("extracted_findings", [])
     loop_count = state.get("loop_count", 0)
+    max_loops = state.get("max_loops", 1)
+    if loop_count >= max_loops:
+        return {"knowledge_gaps": [], "loop_count": loop_count}
+    budget = SessionBudget.model_validate(state.get("budget") or {})
+    budget.increment_loop()
+    max_web_gaps = max(0, budget.max_tavily_calls - budget.current_tavily_calls)
+    system_prompt = REFLECTOR_SYSTEM_PROMPT.replace("{MAX_WEB_GAPS}", str(max_web_gaps))
 
     # ── Build context for LLM evaluation ──
     plan_summary = "\n".join([
@@ -74,6 +83,7 @@ async def reflector_node(state: DeepResearchState) -> Dict[str, Any]:
         model=settings.gemini_model,
         google_api_key=settings.google_api_key,
         temperature=0.1,
+        max_output_tokens=1024,
     )
 
     user_prompt = f"""
@@ -91,13 +101,17 @@ Vòng lặp tối đa: {state.get('max_loops', 3)}
 Hãy đánh giá mức độ phủ kiến thức và chỉ ra các lỗ hổng (nếu có).
 """
 
+    budget.reserve_input(f"{system_prompt}\n{user_prompt}")
+
     response = await llm.ainvoke([
-        {"role": "system", "content": REFLECTOR_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ])
 
     # ── Parse reflection result ──
-    gaps, summary = _parse_reflection_response(response.content)
+    if not isinstance(response.content, str) or len(response.content) > 8_000:
+        raise ValueError("Reflector response exceeded the allowed output size.")
+    gaps, summary = _parse_reflection_response(response.content, max_web_gaps)
 
     logger.info(
         f"🪞 Reflector: Loop {loop_count + 1} — "
@@ -108,10 +122,13 @@ Hãy đánh giá mức độ phủ kiến thức và chỉ ra các lỗ hổng (
         "knowledge_gaps": gaps,
         "reflection_summary": summary,
         "loop_count": loop_count + 1,
+        "budget": budget.model_dump(),
     }
 
 
-def _parse_reflection_response(content: str) -> tuple[list[KnowledgeGap], str]:
+def _parse_reflection_response(
+    content: str, max_gaps: int = 2
+) -> tuple[list[KnowledgeGap], str]:
     """Parse the LLM reflection response into gaps and summary."""
     import json
 
@@ -125,7 +142,8 @@ def _parse_reflection_response(content: str) -> tuple[list[KnowledgeGap], str]:
         parsed = json.loads(cleaned)
 
         gaps = [
-            KnowledgeGap(**gap) for gap in parsed.get("knowledge_gaps", [])
+            KnowledgeGap(**{**gap, "target_source": "web"})
+            for gap in parsed.get("knowledge_gaps", [])[:max_gaps]
         ]
         summary = parsed.get("summary", "Reflection completed.")
 

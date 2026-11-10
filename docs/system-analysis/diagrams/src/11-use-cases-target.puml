@@ -1,0 +1,36 @@
+@startuml
+!include _style.iuml
+left to right direction
+title 11 · UML use case mở rộng — ĐỀ XUẤT, CHƯA TRIỂN KHAI
+actor "Sinh viên CNTT" as Student
+rectangle "Mở rộng cần cô duyệt — không phải hiện trạng Phase 3" {
+ usecase "UC-08 · Nhập PDF / URL riêng\nvà chọn nguồn" as Input #FFF5D6
+ usecase "UC-09 · Gửi feedback,\nnghiên cứu bổ sung / viết lại" as Feedback #FFF5D6
+ usecase "UC-10 · Xem claim–evidence–source\nbằng graph hữu ích" as Trace #FFF5D6
+ usecase "UC-11 · Mở lại phiên\nsau restart backend" as Persist #FFF5D6
+}
+Student -- Input
+Student -- Feedback
+Student -- Trace
+Student -- Persist
+note right of Input
+Liên quan Phase 4.
+Không tự động biến thành systematic review.
+end note
+note right of Feedback
+Liên quan Phase 5.
+Phải giữ budget và không gọi lặp ngoài ý muốn.
+end note
+note right of Trace
+Liên quan Phase 6.
+Benchmark utility trước khi ưu tiên Neo4j/UI graph.
+end note
+note right of Persist
+Liên quan Phase 7.
+Cần session metadata + checkpoint bền vững.
+end note
+note bottom of Student
+Không mặc định thêm đăng nhập, nộp bài hay
+tài khoản giảng viên nếu không có yêu cầu.
+end note
+@enduml

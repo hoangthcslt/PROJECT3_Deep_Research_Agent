@@ -19,8 +19,8 @@ class Settings(BaseSettings):
 
     # ── LLM (Google Gemini) ──
     google_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
-    embedding_model: str = "models/text-embedding-004"
+    gemini_model: str = "gemini-2.5-flash"
+    embedding_model: str = "models/gemini-embedding-001"
 
     # ── Search APIs ──
     tavily_api_key: str = ""

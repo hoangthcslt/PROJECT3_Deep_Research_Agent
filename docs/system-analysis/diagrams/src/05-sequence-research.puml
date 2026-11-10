@@ -1,0 +1,56 @@
+@startuml
+!include _style.iuml
+title 05 · Sequence — NGHIÊN CỨU QUICK (HIỆN TRẠNG)
+participant "LangGraph\nnode thực" as G
+participant "SessionBudget" as B
+participant "Tavily" as Search
+participant "Reader / website" as W
+participant "Gemini" as AI
+database "Qdrant" as Q
+database "Neo4j" as N
+participant "Citation guard" as C
+database "Checkpoint RAM" as CP
+loop Với câu hỏi trong plan, tối đa search budget
+ G -> B : kiểm tra / tăng search counter
+ G -> Search : search_web(query)
+ Search --> G : metadata URL → source_id ổn định
+end
+loop Tối đa 8 trang chưa đọc, theo cấu hình
+ G -> B : giới hạn lần đọc
+ G -> W : validate URL/DNS/redirect → đọc có giới hạn
+ W --> G : nội dung dùng được
+ G -> G : giới hạn prefix 8.000 byte UTF-8
+ G -> B : reserve input embedding
+ G -> AI : embedding tài liệu
+ AI --> G : vector được kiểm tra
+ G -> Q : upsert key(session, source, chunk)
+ Q --> G : số chunk thành công
+ G -> G : chỉ sau thành công mới ghi documents_read
+end
+loop Với mỗi câu hỏi phụ trong plan
+ G -> B : reserve input query embedding
+ G -> AI : embedding câu hỏi
+ AI --> G : vector truy vấn được kiểm tra
+ G -> Q : query_points(vector, filter session_id)
+ Q --> G : context cùng phiên
+ G -> B : reserve input extraction
+ G -> AI : trích xuất findings + source_ids
+ AI --> G : findings; loại nguồn ngoài context đã đọc
+end
+G -> N : Source/Finding/EXTRACTED_FROM có session key
+G -> B : reserve input reflection
+G -> AI : reflect một lần
+AI --> G : nhận xét và knowledge gaps
+G -> B : reserve input synthesis
+G -> AI : tổng hợp từ findings
+AI --> G : bản nháp với marker citation
+G -> C : kiểm tra body citation, nguồn đã đọc
+alt Hợp lệ
+ C --> G : references chuẩn
+ G -> CP : draft + budget → interrupt report_approval
+else Citation sai
+ G --> G : exception → SessionManager chuyển error
+end
+note over N,AI : Neo4j nhận dữ liệu truy vết; không được dùng\nlàm context sinh báo cáo trong pipeline hiện tại.
+note over G,B : Trang / truy vấn lỗi có thể bị bỏ qua nếu vẫn còn nguồn dùng được.\nKhông còn nguồn, cạn budget, lỗi LLM/embedding/lưu trữ thì dừng ở bước lỗi;\nSessionManager chuyển error, không chạy tiếp các bước dưới.
+@enduml

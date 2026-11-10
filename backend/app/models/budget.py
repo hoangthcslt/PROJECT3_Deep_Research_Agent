@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field
 from app.config import settings
 
 
+def estimate_input_tokens(text: str) -> int:
+    """Conservative tokenizer-free estimate: one input token per UTF-8 byte."""
+    return len(text.encode("utf-8"))
+
+
 class SessionBudget(BaseModel):
     """
     Tracks and enforces resource consumption limits for a single research session.
@@ -61,6 +66,10 @@ class SessionBudget(BaseModel):
 
     def increment_loop(self) -> None:
         """Record a loop iteration."""
+        if self.current_loop >= self.max_loop_iterations:
+            raise BudgetExhaustedError(
+                f"Loop budget exhausted: {self.current_loop}/{self.max_loop_iterations}"
+            )
         self.current_loop += 1
 
     def can_read_document(self) -> bool:
@@ -69,7 +78,22 @@ class SessionBudget(BaseModel):
 
     def increment_document_read(self) -> None:
         """Record a document read."""
+        if self.current_documents_read >= self.max_documents_to_read:
+            raise BudgetExhaustedError(
+                f"Document read budget exhausted: {self.current_documents_read}/{self.max_documents_to_read}"
+            )
         self.current_documents_read += 1
+
+    def reserve_input(self, text: str) -> int:
+        """Reserve estimated input tokens before calling an LLM or embedder."""
+        estimated = estimate_input_tokens(text)
+        if self.current_total_input_tokens + estimated > self.max_total_input_tokens:
+            raise BudgetExhaustedError(
+                "Input token budget exhausted: "
+                f"{self.current_total_input_tokens}+{estimated}>{self.max_total_input_tokens}"
+            )
+        self.current_total_input_tokens += estimated
+        return estimated
 
     def get_usage_summary(self) -> dict:
         """Return a summary of current resource usage."""

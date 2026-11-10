@@ -1,4 +1,6 @@
-Để bảo vệ đồ án tốt nghiệp xuất sắc trước hội đồng, việc có một **Chiến lược Đánh giá (Evaluation Strategy)** mang tính định lượng, khoa học và kiểm chứng được là yếu tố quyết định điểm số cao nhất.
+> **BẢN BRAINSTORM, KHÔNG PHẢI KẾT QUẢ THỰC NGHIỆM — 09/11/2026.** Bản trước có các tỷ lệ kết quả chưa có dữ liệu hỗ trợ; không được đưa lên slide như số đã đo. Tập ca dưới đây còn gồm nhiều chức năng ngoài Phase 3 và nhiều lĩnh vực ngoài persona đã chốt. Dùng [protocol kiểm chứng mới](../../system-analysis/06-ke-hoach-kiem-chung.md), [20 ca CNTT](../../system-analysis/benchmarks/cases.csv) và các mẫu kết quả trống cho lần đo tới. Các mục tiêu cũ không mặc nhiên là tiêu chí đã được cô duyệt.
+
+Để bảo vệ đồ án, việc có một **chiến lược đánh giá** mang tính định lượng, kiểm chứng được là cần thiết. Nội dung bên dưới được giữ như lịch sử ý tưởng và phải đọc cùng nhãn chưa kiểm chứng ở đầu tài liệu.
 
 Dưới đây là khung đánh giá chuẩn học thuật cho AI Deep Research Agent, bao gồm công thức đo lường, phương pháp đánh giá tự động (LLM-as-a-Judge) và bộ Test Suite gồm 10 kịch bản thử nghiệm đa dạng.
 
@@ -104,12 +106,12 @@ Bộ dữ liệu này được thiết kế phân tầng từ dễ đến khó, 
 
 ### BẢNG TIÊU CHÍ CHẤM ĐIỂM BẢO VỆ ĐỒ ÁN (SCORING RUBRIC)
 
-Khi đứng trước hội đồng, bạn có thể tự tin chiếu slide kết quả thực nghiệm dựa trên bảng tổng hợp này:
+Chỉ trình bày bảng kết quả với hội đồng khi có dữ liệu thô, cấu hình, baseline và nhãn đánh giá. Hiện chưa có kết quả để điền:
 
 | Hạng mục đánh giá | Chỉ số mục tiêu | Kết quả ĐA2 (Baseline RAG) | Kết quả ĐA3 (Deep Research Agent) |
 |:---|:---:|:---:|:---:|
-| **Source Relevance** | $\ge 85\%$ | $60\%$ (chỉ match keyword cố định) | **$88.5\%$** (nhờ sub-queries linh hoạt) |
-| **Faithfulness (Chống ảo giác)** | $\ge 95\%$ | $82\%$ (dễ hallucinate khi thiếu data) | **$96.8\%$** (nhờ Citation Guardrail) |
-| **Average Loop Efficiency** | $1.8 - 2.5$ loops | Không áp dụng (luôn là 1 bước) | **$2.1$ loops** |
-| **Citation Validity** | $100\%$ URL sống | Không có URL thật (toàn link mock) | **$100\%$** (liên kết DOI/Semantic Scholar) |
-| **Edge-case Robustness (TC10)** | Không bịa đặt | Thất bại (Cố bịa ra câu trả lời) | **Vượt qua** (Biết tự thừa nhận thiếu dữ liệu) |
+| **Source Relevance** | Mục tiêu cũ, cần duyệt lại | CHƯA ĐO | CHƯA ĐO |
+| **Faithfulness (Chống ảo giác)** | Mục tiêu cũ, cần duyệt lại | CHƯA ĐO | CHƯA ĐO |
+| **Average Loop Efficiency** | Không áp cho Quick một vòng | CHƯA ĐO | CHƯA ĐO |
+| **Citation Validity** | Tách ID hợp lệ, URL truy cập được và support ngữ nghĩa | CHƯA ĐO | CHƯA ĐO |
+| **Edge-case Robustness (TC10)** | Chuyển sang fixture có nhãn, không đoán một chủ đề không tồn tại | CHƯA ĐO | CHƯA ĐO |

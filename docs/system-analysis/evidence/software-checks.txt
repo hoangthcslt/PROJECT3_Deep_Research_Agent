@@ -1,0 +1,63 @@
+Baseline date: 2026-11-09
+Scope: software verification for analysis dossier; no research-quality benchmark or live-provider claim.
+
+backend tests
+Command: D:\Projects\pj3\PROJECT3_Deep_Research_Agent\backend\.venv\Scripts\python.exe -B -m pytest tests -q -p no:cacheprovider -o asyncio_default_fixture_loop_scope=function
+Exit: 0
+............................................................             [100%]
+60 passed in 2.87s
+
+
+
+frontend build
+Command: npm.cmd run build
+Exit: 0
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 3174 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                 0.47 kB │ gzip:   0.30 kB
+dist/assets/index-CWpi61w5.css                 15.48 kB │ gzip:   3.66 kB
+dist/assets/react-force-graph-2d-BlkhtRPE.js  186.59 kB │ gzip:  60.79 kB
+dist/assets/index-ajI01t3I.js                 441.25 kB │ gzip: 137.46 kB
+
+✓ built in 225ms
+
+npm notice run frontend@0.0.0 build
+npm notice run tsc -b && vite build
+
+
+frontend lint
+Command: npm.cmd run lint
+Exit: 0
+src/hooks/useResearchWebSocket.ts:72:20: warning react(refs): Cannot access refs during render help: React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected
+src/hooks/useResearchWebSocket.ts:100:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/pages/ReportView.tsx:12:20: warning react(refs): Cannot access refs during render help: React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected
+src/pages/ReportView.tsx:21:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/pages/ResearchProgress.tsx:46:20: warning react(refs): Cannot access refs during render help: React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected
+src/pages/ResearchProgress.tsx:59:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/pages/ResearchProgress.tsx:71:36: warning react-hooks(exhaustive-deps): React Hook useEffect has missing dependencies: 'snapshot.research_plan', 'planInterrupt', and 'planInterrupt.plan' help: Either include it or remove the dependency array.
+
+npm notice run frontend@0.0.0 lint
+npm notice run oxlint
+
+
+snapshot test
+Command: node --test src/hooks/researchSnapshot.test.mjs
+Exit: 0
+✔ accepts a newer revision for the active session only (0.5521ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 94.7705
+
+
+
+Git HEAD (working tree has uncommitted changes): c97f3cedb66fa295743f4ff8ef4c732122cbefe4
+Aggregate source manifest SHA256: aa5efd488e3d6ceba39d79902dec599984683a0345d6d442479f7faa9fc47551
+No .env or credentials included.

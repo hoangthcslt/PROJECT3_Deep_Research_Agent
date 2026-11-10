@@ -1,0 +1,38 @@
+@startuml
+!include _style.iuml
+title 04 · Sequence — TẠO VÀ DUYỆT KẾ HOẠCH (HIỆN TRẠNG)
+actor "Sinh viên" as S
+participant "React UI" as UI
+participant "REST API" as API
+participant "SessionManager" as M
+participant "LangGraph" as G
+database "Checkpoint RAM" as CP
+participant "Gemini" as LLM
+S -> UI : gửi câu hỏi
+UI -> API : POST /start {question, depth: quick}
+API -> M : create(session_id, state + budget)
+API --> UI : 200 {session_id, status: created}
+UI -> API : POST /{id}/run
+API -> M : start(id), kiểm tra chưa chạy
+M ->> G : task astream(state, thread_id=id)
+API --> UI : 200 snapshot running
+G -> LLM : reserve budget → lập plan
+LLM --> G : câu hỏi phụ web
+G -> CP : lưu kết quả planner
+G -> CP : interrupt tại plan_approval
+G --> M : checkpoint đang chờ
+M --> UI : WS HITL_TRIGGER / GET snapshot\nawaiting_plan + interrupt_id + revision
+S -> UI : sửa / duyệt kế hoạch
+UI -> API : POST /{id}/resume\naction + interrupt_id + plan khi sửa
+alt ID cũ hoặc đã dùng
+ API --> UI : 409; giữ trạng thái mới nhất
+else Quyết định hợp lệ
+ API -> M : kiểm tra trạng thái + lock
+ M ->> G : task Command(resume=decision), cùng thread_id
+ G -> CP : tiếp tục node approval
+ note over G,LLM : Không chạy lại planner chỉ vì approve/modify plan.
+ G -> G : áp dụng plan → chuyển searcher
+ API --> UI : snapshot revision mới
+end
+note over M,UI : WS chỉ quan sát. GET/reconnect không chạy lại graph.\nThứ tự tới của HTTP/WS có thể khác; UI kiểm tra revision.
+@enduml

@@ -1,0 +1,30 @@
+@startuml
+!include _style.iuml
+left to right direction
+title 01 · Ngữ cảnh hệ thống — HIỆN TRẠNG PHASE 3
+actor "Sinh viên CNTT\nACT-01" as Student
+actor "Người vận hành\nACT-02" as Operator
+rectangle "Trợ lý khảo sát công nghệ\nA · Kế hoạch\nB · Bằng chứng\nC · Báo cáo" as System
+cloud "Gemini API\nLLM + embedding" as Gemini
+cloud "Tavily API\nTìm kiếm web" as Tavily
+cloud "Website công khai\nNội dung không tin cậy" as Web
+artifact "Báo cáo Markdown\nđã được sinh viên duyệt" as Report
+actor "Giảng viên\nStakeholder" as Teacher
+Student --> System : câu hỏi, quyết định duyệt
+System --> Student : plan, trạng thái, draft
+Operator --> System : cấu hình / khởi động
+System --> Gemini : prompt / văn bản
+System --> Tavily : search query
+System --> Web : HTTP(S) được kiểm tra
+System --> Report : xuất sau phê duyệt
+Student --> Teacher : trao đổi / nộp bài thủ công
+note bottom of Teacher
+Không có tài khoản hoặc
+màn hình giảng viên trong app.
+end note
+note bottom of System
+UI, backend, workflow và kho dữ liệu do nhóm
+vận hành nằm trong ranh giới giải pháp.
+Chưa chứng minh tích hợp dịch vụ thật.
+end note
+@enduml

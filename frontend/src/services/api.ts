@@ -9,7 +9,40 @@ import type {
   ResearchStartResponse,
   ResearchResumeRequest,
   GraphData,
+  ResearchSessionStatusResponse,
+  ResearchReportResponse,
+  UploadPdfResponse,
 } from "../types/research";
+import { resolveSourceLink } from "./researchInputs";
+
+function responseError(status: number, statusText: string, payload: unknown): Error {
+  const body = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : {};
+  const detail = body.detail;
+  const message = Array.isArray(detail)
+    ? detail.map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const error = item as Record<string, unknown>;
+          const location = Array.isArray(error.loc)
+            ? error.loc.filter((part): part is string | number => typeof part === "string" || typeof part === "number").join(".")
+            : "";
+          const reason = typeof error.msg === "string" ? error.msg : JSON.stringify(item);
+          return location ? `${location}: ${reason}` : reason;
+        }
+        return String(item);
+      }).join("; ")
+    : typeof detail === "string"
+      ? detail
+      : typeof body.message === "string"
+        ? body.message
+        : detail == null
+          ? `HTTP ${status}${statusText ? `: ${statusText}` : ""}`
+          : JSON.stringify(detail);
+
+  return new Error(message);
+}
 
 class ApiService {
   private baseUrl: string;
@@ -31,14 +64,13 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      throw responseError(response.status, response.statusText, await response.json().catch(() => null));
     }
 
     return response.json();
   }
 
-  /** POST /research/start — Start a new research session */
+  /** POST /research/start — Create a session without starting the graph */
   async startResearch(data: ResearchStartRequest): Promise<ResearchStartResponse> {
     return this.request<ResearchStartResponse>("/research/start", {
       method: "POST",
@@ -46,8 +78,20 @@ class ApiService {
     });
   }
 
+  /** GET /research/{sessionId} — Read the latest session snapshot */
+  async getResearchStatus(sessionId: string, signal?: AbortSignal): Promise<ResearchSessionStatusResponse> {
+    return this.request<ResearchSessionStatusResponse>(`/research/${sessionId}`, { signal });
+  }
+
+  /** POST /research/{sessionId}/run — Explicitly start the graph */
+  async runResearch(sessionId: string): Promise<ResearchSessionStatusResponse> {
+    return this.request<ResearchSessionStatusResponse>(`/research/${sessionId}/run`, {
+      method: "POST",
+    });
+  }
+
   /** POST /research/upload-pdf — Upload a PDF file */
-  async uploadPdf(sessionId: string, file: File): Promise<{ file_id: string; status: string }> {
+  async uploadPdf(sessionId: string, file: File): Promise<UploadPdfResponse> {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("session_id", sessionId);
@@ -58,21 +102,30 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to upload PDF");
+      throw responseError(response.status, response.statusText, await response.json().catch(() => null));
     }
 
-    return response.json();
+    return response.json() as Promise<UploadPdfResponse>;
+  }
+
+  sourceHref(url: string | undefined): string | null {
+    return resolveSourceLink(url, this.baseUrl);
   }
 
   /** POST /research/{sessionId}/resume — Send HITL decision */
   async resumeResearch(
     sessionId: string,
     data: ResearchResumeRequest
-  ): Promise<{ status: string }> {
-    return this.request(`/research/${sessionId}/resume`, {
+  ): Promise<ResearchSessionStatusResponse> {
+    return this.request<ResearchSessionStatusResponse>(`/research/${sessionId}/resume`, {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  /** GET /research/{sessionId}/report — Read the saved draft or final report */
+  async getResearchReport(sessionId: string, signal?: AbortSignal): Promise<ResearchReportResponse> {
+    return this.request<ResearchReportResponse>(`/research/${sessionId}/report`, { signal });
   }
 
   /** GET /research/{sessionId}/graph — Fetch knowledge graph data */
@@ -87,7 +140,7 @@ class ApiService {
     );
 
     if (!response.ok) {
-      throw new Error("Export failed");
+      throw responseError(response.status, response.statusText, await response.json().catch(() => null));
     }
 
     return response.blob();

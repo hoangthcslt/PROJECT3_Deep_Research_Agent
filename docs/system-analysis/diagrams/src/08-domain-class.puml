@@ -1,0 +1,87 @@
+@startuml
+!include _style.iuml
+title 08 · UML lớp/miền logic — HIỆN TRẠNG, KHÔNG PHẢI ERD SQL
+hide empty methods
+class ResearchSession {
+ session_id : str
+ status : created/running/awaiting_*/completed/error
+ revision : int
+ state : DeepResearchState
+ pending_interrupt : PendingInterrupt?
+ task / lock : runtime
+}
+class ResearchSessionManager {
+ sessions : dict
+ create()
+ start()
+ resume()
+ snapshot()
+ report_view()
+}
+class DeepResearchState <<TypedDict>> {
+ session_id : str
+ research_question : str
+ research_plan : list
+ sources_found : list
+ documents_read : list
+ extracted_findings : list
+ loop_count / max_loops : int
+ report_draft / final_report : str?
+ report_approved : bool
+ errors : list
+}
+class ResearchSubQuestion {
+ id : str
+ question : str
+ target_source : web
+ status : str
+}
+class SourceMetadata {
+ source_id : str
+ url / title : str
+ source_type : str
+}
+class IndexedDocument <<dict>> {
+ source_id : str
+ content / title / url : str
+ truncated : bool
+}
+class ExtractedFinding {
+ claim / evidence : str
+ source_ids : list[str]
+ confidence_score : float
+}
+class SessionBudget {
+ search / document / loop counters
+ conservative input byte estimate
+ reserve_input()
+ increment_search()
+}
+class PendingInterrupt {
+ interrupt_id : str
+ type : PLAN / REPORT
+ plan / report_draft
+}
+class QdrantChunk <<payload>> {
+ session_id / source_id
+ chunk_index / content
+ vector : 768 dimensions
+}
+ResearchSessionManager "1" o-- "0..*" ResearchSession
+ResearchSession "1" *-- "1" DeepResearchState
+ResearchSession "1" o-- "0..1" PendingInterrupt
+DeepResearchState "1" *-- "0..*" ResearchSubQuestion
+DeepResearchState "1" *-- "0..*" SourceMetadata
+DeepResearchState "1" *-- "0..*" IndexedDocument
+DeepResearchState "1" *-- "0..*" ExtractedFinding
+DeepResearchState "1" *-- "1" SessionBudget : budget dict
+SourceMetadata "1" -- "0..1" IndexedDocument : source_id
+IndexedDocument "1" -- "1..*" QdrantChunk : index thành công
+ExtractedFinding "0..*" -- "1..*" SourceMetadata : source_ids đã đọc
+note bottom of DeepResearchState
+State và checkpoint ở RAM.
+Report chưa có bảng lưu bền vững.
+Không có entity User/Class/Submission
+đã được triển khai.
+end note
+@enduml

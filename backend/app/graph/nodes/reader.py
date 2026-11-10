@@ -1,109 +1,183 @@
-"""
-Node 3: Document Reader & Ingest
-Reads full content from web URLs (via Jina Reader) and uploaded PDFs,
-then chunks and stores embeddings in Qdrant.
-
-Maps from brainstorm: agent_flow_state_machine.md (Node 3).
-"""
+"""Read only selected sources and index bounded, source-labelled excerpts."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
+from app.graph.errors import UserVisibleResearchError
 from app.graph.state import DeepResearchState
-from app.tools.read_url import read_url
-from app.tools.parse_pdf import parse_pdf
+from app.models.budget import SessionBudget
 from app.services.qdrant_service import qdrant_service
+from app.tools.parse_pdf import PDFParseError
+from app.tools.read_url import read_pdf_url, read_url
 
 logger = logging.getLogger(__name__)
+MAX_INDEXED_TEXT_BYTES = 8_000
 
 
-async def reader_node(state: DeepResearchState) -> Dict[str, Any]:
-    """
-    Read full content from discovered sources:
-    1. Web URLs → Jina Reader for clean markdown
-    2. Uploaded PDFs → PyMuPDF4LLM for markdown extraction
-    Then chunk and embed into Qdrant for semantic retrieval.
-    """
-    logger.info("📖 Reader: Starting document ingestion...")
+def _get(source: Any, name: str, default: Any = None) -> Any:
+    return source.get(name, default) if isinstance(source, dict) else getattr(source, name, default)
 
+
+def _truncate_utf8(text: str, max_bytes: int) -> tuple[str, bool]:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text, False
+    return encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip(), True
+
+
+async def reader_node(state: DeepResearchState) -> dict[str, Any]:
+    """Read only the explicitly selected candidates, then ingest each source once."""
     session_id = state["session_id"]
     sources = state.get("sources_found", [])
-    uploaded_files = state.get("user_uploaded_files", [])
+    candidates = {
+        _get(source, "source_id"): source
+        for source in sources
+        if _get(source, "source_id")
+    }
+    selected_ids = state.get("selected_source_ids", [])
+    if not selected_ids or set(selected_ids) - set(candidates):
+        raise UserVisibleResearchError("Select one or more available sources before reading.")
 
-    documents_read: list[Dict[str, Any]] = []
-    errors: list[str] = []
+    uploaded = {
+        record.get("source_id"): record
+        for record in state.get("user_uploaded_files", [])
+        if record.get("source_id")
+    }
+    existing_documents = state.get("documents_read", [])
+    existing_ids = {document.get("source_id") for document in existing_documents}
+    budget = SessionBudget.model_validate(state.get("budget") or {})
+    documents_read: list[dict[str, Any]] = []
+    source_errors: list[str] = []
 
-    # ── Read web sources ──
-    for source in sources:
-        if source.source_type in ("paper", "webpage") and source.url:
-            try:
-                result = await read_url(source.url)
-                if result.full_text:
-                    doc_entry = {
-                        "source_id": source.source_id,
-                        "title": result.title,
-                        "content": result.full_text,
-                        "url": source.url,
-                        "source_type": source.source_type,
-                    }
-                    documents_read.append(doc_entry)
+    for source_id in selected_ids:
+        if source_id in existing_ids:
+            continue
+        if not budget.can_read_document():
+            source_errors.append(
+                f"Could not read selected source {source_id}; the document read limit was reached."
+            )
+            continue
+        budget.increment_document_read()
+        source = candidates[source_id]
+        source_type = _get(source, "source_type", "webpage")
+        url = _get(source, "url")
+        title = str(_get(source, "title", "Untitled source"))[:500]
+        authors = list(_get(source, "authors", []) or [])
+        year = _get(source, "year")
+        page_count = _get(source, "page_count")
+        truncated = bool(_get(source, "truncated", False))
+        content_kind = "webpage"
+        content = ""
+        read_title = title
 
-                    # Chunk & embed into Qdrant
-                    await qdrant_service.ingest_document(
-                        session_id=session_id,
-                        source_id=source.source_id,
-                        content=result.full_text,
-                        metadata={
-                            "source_url": source.url,
-                            "source_type": source.source_type,
-                            "title": result.title,
-                        },
-                    )
-                    logger.info(f"📖 Reader: Ingested '{result.title}' ({source.source_id})")
-                else:
-                    logger.warning(f"⚠️ Reader: Empty content from {source.url}")
-
-            except Exception as e:
-                error_msg = f"Failed to read {source.url}: {str(e)}"
-                logger.error(f"❌ {error_msg}")
-                errors.append(error_msg)
-
-    # ── Read uploaded PDFs ──
-    for file_path in uploaded_files:
-        try:
-            result = parse_pdf(file_path)
-            if result.full_text:
-                source_id = f"REF_PDF_{len(documents_read) + 1}"
-                doc_entry = {
-                    "source_id": source_id,
-                    "title": result.metadata.get("title", file_path),
-                    "content": result.full_text,
-                    "file_path": file_path,
-                    "source_type": "uploaded_pdf",
-                    "page_count": result.page_count,
-                }
-                documents_read.append(doc_entry)
-
-                await qdrant_service.ingest_document(
-                    session_id=session_id,
-                    source_id=source_id,
-                    content=result.full_text,
-                    metadata={
-                        "source_type": "uploaded_pdf",
-                        "title": result.metadata.get("title", file_path),
-                        "page_count": result.page_count,
-                    },
+        if source_id in uploaded:
+            record = uploaded[source_id]
+            content = str(record.get("content", ""))
+            content_kind = "pdf_excerpt"
+            page_count = record.get("page_count")
+            truncated = bool(record.get("truncated", False))
+        elif source_type == "paper":
+            pdf_url = _get(source, "open_access_pdf")
+            abstract = str(_get(source, "content_snippet", "") or "").strip()
+            if pdf_url:
+                try:
+                    parsed = await read_pdf_url(pdf_url)
+                    content = str(parsed.get("full_text", ""))
+                    page_count = parsed.get("page_count")
+                    truncated = bool(parsed.get("truncated", False))
+                    content_kind = "pdf_excerpt"
+                    if not content.strip():
+                        raise PDFParseError("No readable PDF text.")
+                except Exception:
+                    if abstract:
+                        content = abstract
+                        content_kind = "abstract"
+                        source_errors.append(
+                            f"Could not read full text for source {source_id}; the abstract was used instead."
+                        )
+                    else:
+                        source_errors.append(
+                            f"Could not read selected source {source_id}; no readable text was available."
+                        )
+            elif abstract:
+                content = abstract
+                content_kind = "abstract"
+            else:
+                source_errors.append(
+                    f"Could not read selected source {source_id}; no readable text was available."
                 )
-                logger.info(f"📖 Reader: Ingested PDF '{file_path}' ({result.page_count} pages)")
+        elif isinstance(url, str) and url.lower().split("?", 1)[0].split("#", 1)[0].endswith(".pdf"):
+            try:
+                parsed = await read_pdf_url(url)
+                content = str(parsed.get("full_text", ""))
+                page_count = parsed.get("page_count")
+                truncated = bool(parsed.get("truncated", False))
+                content_kind = "pdf_excerpt"
+                if not content.strip():
+                    source_errors.append(
+                        f"Could not read selected source {source_id}; no readable text was available."
+                    )
+            except Exception:
+                source_errors.append(
+                    f"Could not read selected source {source_id}; the PDF was invalid or unavailable."
+                )
+        elif isinstance(url, str):
+            result = await read_url(url)
+            content = result.full_text
+            read_title = str(result.title or title)[:500]
+            content_kind = "webpage"
+            if not content.strip():
+                source_errors.append(
+                    f"Could not read selected source {source_id}; no readable text was available."
+                )
+        elif source_type == "paper":
+            content = str(_get(source, "content_snippet", "") or "")
+            content_kind = "abstract"
+        else:
+            source_errors.append(
+                f"Could not read selected source {source_id}; no readable text was available."
+            )
 
-        except Exception as e:
-            error_msg = f"Failed to parse PDF {file_path}: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            errors.append(error_msg)
+        if not content.strip():
+            continue
 
-    logger.info(f"📖 Reader: Total documents ingested: {len(documents_read)}")
+        indexed_text, index_truncated = _truncate_utf8(content, MAX_INDEXED_TEXT_BYTES)
+        truncated = truncated or index_truncated
+        indexed_chunks = await qdrant_service.ingest_document(
+            session_id=session_id,
+            source_id=source_id,
+            content=indexed_text,
+            metadata={
+                "source_url": url,
+                "source_type": source_type,
+                "title": read_title,
+                "authors": authors,
+                "year": year,
+                "content_kind": content_kind,
+                "page_count": page_count,
+                "truncated": truncated,
+            },
+            budget=budget,
+        )
+        if not indexed_chunks:
+            raise RuntimeError("A selected source could not be indexed.")
+
+        documents_read.append({
+            "source_id": source_id,
+            "title": read_title,
+            "content": indexed_text,
+            "url": url,
+            "source_type": source_type,
+            "content_kind": content_kind,
+            "page_count": page_count,
+            "truncated": truncated,
+        })
+        existing_ids.add(source_id)
+        logger.info("Indexed selected source %s (%s chunks)", source_id, indexed_chunks)
 
     return {
         "documents_read": documents_read,
-        "errors": errors,
+        "errors": source_errors,
+        "source_errors": source_errors,
+        "budget": budget.model_dump(),
     }

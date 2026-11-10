@@ -1,0 +1,42 @@
+@startuml
+!include _style.iuml
+left to right direction
+title 09 · UML thành phần / triển khai — CẤU HÌNH HIỆN TRẠNG
+node "Máy sinh viên / trình duyệt" as Browser {
+ component "React UI\ninput / progress / report" as UI
+}
+node "Backend Python · một worker" as Backend {
+ component "FastAPI\nREST + WS" as API
+ component "SessionManager\nlock / revision / task" as Manager
+ component "LangGraph\nplanner → approval → research\n→ synth → approval" as Graph
+ collections "Session state RAM" as State
+ collections "MemorySaver RAM" as Checkpoint
+}
+node "Dịch vụ do nhóm vận hành" {
+ database "Qdrant\nchunks + vectors" as Qdrant
+ database "Neo4j\nSource / Finding / quan hệ" as Neo4j
+}
+cloud "Provider ngoài\nGemini + Tavily" as Providers
+cloud "Website công khai" as Web
+UI --> API : REST command/read
+API --> UI : WS snapshots
+API --> Manager : run / resume / snapshot / report
+Manager --> State : quản lý phiên
+Manager --> Graph : astream / resume
+Graph --> Checkpoint : checkpoint / interrupt
+Graph --> Qdrant : ingest + retrieve theo session
+Graph --> Neo4j : ghi dữ liệu truy vết
+API --> Neo4j : GET graph theo session
+Graph --> Providers : API HTTPS
+Graph --> Web : Reader HTTP(S) có kiểm tra
+note bottom of Backend
+Sơ đồ code/cấu hình, không chứng minh
+dịch vụ thật đã khởi động thành công.
+Không có queue worker riêng hoặc
+persistence PostgreSQL hiện hành.
+end note
+note bottom of Neo4j
+Không có đường Neo4j → Synthesizer
+để sinh câu trả lời ở Phase 3.
+end note
+@enduml

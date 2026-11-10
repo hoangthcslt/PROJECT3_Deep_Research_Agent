@@ -10,8 +10,8 @@ from fastapi.responses import PlainTextResponse
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Reference to active sessions (shared with research routes)
-from app.api.routes.research import _active_sessions
+from app.services.research_sessions import session_manager
+from app.services.session_manager import SessionNotFound
 
 
 @router.get("/{session_id}/export")
@@ -20,14 +20,18 @@ async def export_report(session_id: str, format: str = "md"):
     GET /api/v1/research/{session_id}/export?format=md|pdf|docx
     Export the final research report.
     """
-    if session_id not in _active_sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
+    if format in {"pdf", "docx"}:
+        raise HTTPException(status_code=501, detail=f"{format.upper()} export not yet implemented.")
+    if format != "md":
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
-    session = _active_sessions[session_id]
-    report = session["state"].get("final_report") or session["state"].get("report_draft")
+    try:
+        report = await session_manager.report(session_id)
+    except SessionNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     if not report:
-        raise HTTPException(status_code=400, detail="No report available for this session.")
+        raise HTTPException(status_code=409, detail="Only an approved final report can be exported.")
 
     if format == "md":
         return PlainTextResponse(
@@ -37,11 +41,3 @@ async def export_report(session_id: str, format: str = "md"):
                 "Content-Disposition": f"attachment; filename=research_report_{session_id[:8]}.md"
             },
         )
-    elif format == "pdf":
-        # TODO: Implement PDF export (html2pdf or weasyprint)
-        raise HTTPException(status_code=501, detail="PDF export not yet implemented.")
-    elif format == "docx":
-        # TODO: Implement DOCX export (python-docx)
-        raise HTTPException(status_code=501, detail="DOCX export not yet implemented.")
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")

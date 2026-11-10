@@ -1,0 +1,2 @@
+﻿Backend full suite (2026-11-09 17:58 Asia/Bangkok): 74 passed, 7 failed.
+Failures are old Phase 3 tests not yet updated for the Phase 4 source-selection pause/upload contract, plus one message-case assertion. See docs/WORK_LOG.md.
